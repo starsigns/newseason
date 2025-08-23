@@ -39,41 +39,20 @@ def get_domain_from_email(email):
     return None
 
 def get_user_ip():
-    """Get user's real IP address, handling proxies and local development."""
-    # Check for forwarded IP headers (when behind proxy/load balancer)
-    forwarded_ips = request.environ.get('HTTP_X_FORWARDED_FOR')
-    if forwarded_ips:
-        # X-Forwarded-For can contain multiple IPs, take the first (original client)
-        ip = forwarded_ips.split(',')[0].strip()
-        if ip and not ip.startswith('127.') and not ip.startswith('192.168.') and not ip.startswith('10.'):
+    """Get the real client IP, supporting Nginx proxy headers."""
+    # Try X-Forwarded-For (may be a comma-separated list)
+    ip = request.headers.get('X-Forwarded-For', None)
+    if ip:
+        ip = ip.split(',')[0].strip()
+        if ip and ip.lower() != 'unknown':
             return ip
-    
-    # Check other common proxy headers
-    real_ip = request.environ.get('HTTP_X_REAL_IP')
-    if real_ip and not real_ip.startswith('127.') and not real_ip.startswith('192.168.') and not real_ip.startswith('10.'):
-        return real_ip
-    
-    # Check Cloudflare specific header
-    cf_ip = request.environ.get('HTTP_CF_CONNECTING_IP')
-    if cf_ip and not cf_ip.startswith('127.') and not cf_ip.startswith('192.168.') and not cf_ip.startswith('10.'):
-        return cf_ip
-    
-    # Fall back to remote address
-    remote_addr = request.environ.get('REMOTE_ADDR', 'Unknown')
-    
-    # If we're getting localhost/private IPs, try to get public IP via external service
-    if remote_addr in ['127.0.0.1', 'localhost'] or remote_addr.startswith('192.168.') or remote_addr.startswith('10.'):
-        try:
-            # Get public IP from external service
-            response = requests.get('https://api.ipify.org', timeout=5)
-            if response.status_code == 200:
-                public_ip = response.text.strip()
-                return f"{public_ip} (via ipify - local detected: {remote_addr})"
-        except:
-            pass
-        return f"{remote_addr} (local/private network)"
-    
-    return remote_addr
+    # Try X-Real-IP
+    ip = request.headers.get('X-Real-IP', None)
+    if ip and ip.lower() != 'unknown':
+        return ip
+    # Fallback to REMOTE_ADDR
+    ip = request.remote_addr
+    return ip or 'Unknown'
 
 def get_location_from_ip(ip):
     """Get city and country from IP using ipapi.co (free service)."""
