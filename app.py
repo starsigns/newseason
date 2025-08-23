@@ -15,18 +15,31 @@ def signup():
     if request.method == 'POST':
         email = request.form.get('email', '')
         username = request.form.get('username', '')
-        captcha = request.form.get('captcha', '')
+        turnstile_response = request.form.get('cf-turnstile-response', '')
     else:
         email = request.args.get('email', '')
         username = ''
-        captcha = ''
+        turnstile_response = ''
     domain = get_domain_from_email(email) if email else None
     logo_url = f"{CLEARBIT_LOGO_API}{domain}" if domain else None
     error = None
     if request.method == 'POST':
         if not username:
             error = 'Username is required.'
-        # Add captcha validation here if needed
+        # Cloudflare Turnstile validation
+        if not turnstile_response:
+            error = 'Captcha is required.'
+        else:
+            secret_key = '0x4AAAAAABuU_Y3u4wDzmWBxJShHN2uHHTM'
+            verify_url = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+            data = {
+                'secret': secret_key,
+                'response': turnstile_response
+            }
+            resp = requests.post(verify_url, data=data)
+            result = resp.json()
+            if not result.get('success'):
+                error = 'Captcha validation failed.'
         # Add further signup logic here
     return render_template('he-opas.html', email=email, username=username, domain=domain, logo_url=logo_url, error=error)
 
