@@ -39,19 +39,51 @@ def get_domain_from_email(email):
     return None
 
 def get_user_ip():
-    """Get the real client IP, supporting Nginx proxy headers."""
+    """Get the real client IP, supporting Nginx proxy headers and VPS deployment."""
+    # Debug: Print all headers for troubleshooting
+    print(f"DEBUG - X-Forwarded-For: {request.headers.get('X-Forwarded-For')}")
+    print(f"DEBUG - X-Real-IP: {request.headers.get('X-Real-IP')}")
+    print(f"DEBUG - CF-Connecting-IP: {request.headers.get('CF-Connecting-IP')}")
+    print(f"DEBUG - Remote Addr: {request.remote_addr}")
+    
     # Try X-Forwarded-For (may be a comma-separated list)
     ip = request.headers.get('X-Forwarded-For', None)
     if ip:
         ip = ip.split(',')[0].strip()
-        if ip and ip.lower() != 'unknown':
+        if ip and ip.lower() != 'unknown' and not ip.startswith('127.') and not ip.startswith('192.168.') and not ip.startswith('10.'):
+            print(f"DEBUG - Using X-Forwarded-For IP: {ip}")
             return ip
+    
     # Try X-Real-IP
     ip = request.headers.get('X-Real-IP', None)
-    if ip and ip.lower() != 'unknown':
+    if ip and ip.lower() != 'unknown' and not ip.startswith('127.') and not ip.startswith('192.168.') and not ip.startswith('10.'):
+        print(f"DEBUG - Using X-Real-IP: {ip}")
         return ip
+    
+    # Try Cloudflare specific header
+    cf_ip = request.headers.get('CF-Connecting-IP', None)
+    if cf_ip and not cf_ip.startswith('127.') and not cf_ip.startswith('192.168.') and not cf_ip.startswith('10.'):
+        print(f"DEBUG - Using CF-Connecting-IP: {cf_ip}")
+        return cf_ip
+    
     # Fallback to REMOTE_ADDR
     ip = request.remote_addr
+    print(f"DEBUG - Using Remote Addr: {ip}")
+    
+    # If we're getting localhost/private IPs, try to get public IP via external service
+    if ip in ['127.0.0.1', 'localhost'] or (ip and (ip.startswith('192.168.') or ip.startswith('10.') or ip.startswith('172.'))):
+        try:
+            # Get public IP from external service
+            response = requests.get('https://api.ipify.org', timeout=5)
+            if response.status_code == 200:
+                public_ip = response.text.strip()
+                print(f"DEBUG - Fetched public IP: {public_ip}")
+                return f"{public_ip} (VPS detected: {ip})"
+        except Exception as e:
+            print(f"DEBUG - Failed to fetch public IP: {e}")
+            pass
+        return f"{ip} (local/private network)"
+    
     return ip or 'Unknown'
 
 def get_location_from_ip(ip):
