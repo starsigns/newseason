@@ -1,0 +1,60 @@
+RewriteEngine On
+
+# Redirect root to app.php
+RewriteRule ^$ app.php [QSA,L]
+
+# Redirect to app.php if file doesn't exist (except for he-opas.html)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/he-opas\.html$
+RewriteRule ^(.*)$ app.php [QSA,L]
+
+RewriteEngine On
+
+# Redirect root to app.php
+RewriteRule ^$ app.php [QSA,L]
+
+# Redirect to app.php if file doesn't exist (except for he-opas.html)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/he-opas\.html$
+RewriteRule ^(.*)$ app.php [QSA,L]
+
+# Security headers
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options nosniff
+    Header always set X-Frame-Options DENY
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>
+
+# Disable directory browsing
+Options -Indexes
+
+# Hide sensitive files
+<Files ~ "\.(log|env|ini)$">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Allow access to HTML template
+<Files "he-opas.html">
+    Order allow,deny
+    Allow from all
+</Files>
+
+# Disable directory browsing
+Options -Indexes
+
+# Hide sensitive files
+<Files ~ "\.(log|env|ini)$">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Allow access to HTML template
+<Files "he-opas.html">
+    Order allow,deny
+    Allow from all
+</Files>
