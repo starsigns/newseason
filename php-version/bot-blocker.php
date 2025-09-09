@@ -49,6 +49,25 @@ class BotBlocker {
     ];
     
     public function __construct() {
+        // COMPLETELY SKIP ALL BOT PROTECTION FOR LOCALHOST/DEVELOPMENT
+        $ip = $this->getClientIP();
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $serverName = $_SERVER['SERVER_NAME'] ?? '';
+        
+        if ($ip === '127.0.0.1' || 
+            $ip === '::1' || 
+            $host === 'localhost' ||
+            $serverName === 'localhost' ||
+            strpos($host, 'localhost') !== false || 
+            strpos($host, 'local') !== false ||
+            strpos($ip, '192.168.') === 0 ||
+            strpos($ip, '10.') === 0 ||
+            $ip === '0.0.0.0') {
+            
+            error_log("Bot protection DISABLED for localhost/development environment. IP: $ip, Host: $host");
+            return; // Exit completely, no protection
+        }
+        
         $this->checkAndBlock();
     }
     
@@ -57,6 +76,16 @@ class BotBlocker {
         $referer = $_SERVER['HTTP_REFERER'] ?? '';
         $ip = $this->getClientIP();
         $method = $_SERVER['REQUEST_METHOD'] ?? '';
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        
+        // Skip bot protection for localhost/development
+        if ($ip === '127.0.0.1' || $ip === '::1' || 
+            strpos($host, 'localhost') !== false || 
+            strpos($host, 'local') !== false ||
+            strpos($ip, '192.168.') === 0 ||
+            strpos($ip, '10.') === 0) {
+            return;
+        }
         
         // Always allow whitelisted IPs
         if (in_array($ip, $this->allowedIPs)) {
