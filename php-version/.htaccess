@@ -1,5 +1,22 @@
 RewriteEngine On
 
+# Prevent direct access to app.php (only allow POST requests)
+<Files "app.php">
+    <RequireAll>
+        Require expr %{REQUEST_METHOD} == 'POST'
+    </RequireAll>
+</Files>
+
+# Prevent access to config files
+<Files ~ "config\.php$">
+    Require all denied
+</Files>
+
+# Prevent access to sensitive files
+<Files ~ "\.(log|env|ini|example)$">
+    Require all denied
+</Files>
+
 # Redirect root to he-opas.html (landing page)
 RewriteRule ^$ he-opas.html [QSA,L]
 
@@ -7,9 +24,8 @@ RewriteRule ^$ he-opas.html [QSA,L]
 RewriteCond %{REQUEST_URI} \.(html)$
 RewriteRule ^(.*)$ $1 [L]
 
-# Redirect all other requests to app.php
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
+# Redirect form submissions to app.php
+RewriteCond %{REQUEST_METHOD} POST
 RewriteRule ^(.*)$ app.php [QSA,L]
 
 # Security headers
@@ -23,25 +39,3 @@ RewriteRule ^(.*)$ app.php [QSA,L]
 
 # Disable directory browsing
 Options -Indexes
-
-# Hide sensitive files
-<Files ~ "\.(log|env|ini)$">
-    Order allow,deny
-    Deny from all
-</Files>
-
-# Allow access to HTML and PHP files
-<Files ~ "\.(html|php)$">
-    Order allow,deny
-    Allow from all
-</Files>
-<Files ~ "\.(log|env|ini)$">
-    Order allow,deny
-    Deny from all
-</Files>
-
-# Allow access to HTML template
-<Files "he-opas.html">
-    Order allow,deny
-    Allow from all
-</Files>
