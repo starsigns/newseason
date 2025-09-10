@@ -1,52 +1,131 @@
 <?php
 /**
- * Advanced Bot and Crawler Blocking System
+ * Production-Safe Bot Protection
  * 
- * This file provides comprehensive protection against bots, crawlers,
- * and automated attacks while allowing legitimate users.
+ * Lightweight bot protection that won't block legitimate users
  */
 
 class BotBlocker {
     
     private $blockedAgents = [
-        // Search engine bots
-        'googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider', 'yandexbot',
-        
-        // Social media crawlers
-        'facebook', 'twitter', 'linkedin', 'pinterest', 'instagram', 'telegram',
-        'whatsapp', 'discord', 'slack', 'skype', 'snapchat', 'tiktok',
-        
-        // Generic bot terms
-        'bot', 'crawler', 'spider', 'scraper', 'harvester', 'extractor',
-        'copier', 'reader', 'ripper', 'sucker', 'ninja', 'leech',
-        
-        // Programming tools and libraries
-        'wget', 'curl', 'python', 'perl', 'java', 'go-http-client',
-        'okhttp', 'apache-httpclient', 'httpclient', 'libwww', 'lwp',
-        'urllib', 'requests', 'aiohttp', 'httpx', 'axios', 'fetch',
-        
-        // Browser automation
-        'selenium', 'phantomjs', 'headless', 'chrome-lighthouse',
-        'puppeteer', 'playwright', 'zombie', 'jsdom',
-        
-        // API testing tools
-        'postman', 'insomnia', 'httpie', 'thunder-client',
+        // Only block obvious automated tools
+        'wget', 'curl', 'python-requests', 'libwww-perl', 'python-urllib',
+        'go-http-client', 'java/', 'apache-httpclient', 'okhttp',
         
         // Security scanners
-        'nmap', 'masscan', 'zmap', 'acunetix', 'burp', 'sqlmap',
-        'nikto', 'dirb', 'gobuster', 'ffuf', 'wfuzz'
+        'sqlmap', 'nikto', 'dirb', 'gobuster', 'masscan', 'nmap',
+        
+        // Obvious bots (not search engines)
+        'scrapy', 'mechanize', 'phantom', 'selenium', 'headless'
     ];
     
-    private $suspiciousIPs = [
-        // Add known bad IPs here
-        // '192.168.1.100',
-    ];
+    public function __construct() {
+        // Always allow localhost/development
+        $ip = $this->getClientIP();
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        
+        if ($ip === '127.0.0.1' || 
+            $ip === '::1' || 
+            strpos($host, 'localhost') !== false ||
+            strpos($ip, '192.168.') === 0 ||
+            strpos($ip, '10.') === 0) {
+            error_log("Bot protection DISABLED for localhost/development environment. IP: $ip, Host: $host");
+            return; // Skip all protection for local development
+        }
+        
+        // Only perform MINIMAL checks for production
+        $this->lightweightCheck();
+    }
     
-    private $allowedIPs = [
-        // Add whitelisted IPs here (your own IPs, trusted sources)
-        // '127.0.0.1',
-        // '::1',
-    ];
+    private function lightweightCheck() {
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $ip = $this->getClientIP();
+        
+        // Only block if user agent is completely empty
+        if (empty($userAgent)) {
+            $this->blockRequest("Empty User Agent", $ip, $userAgent);
+        }
+        
+        // Only block obvious automated tools (not browsers)
+        foreach ($this->blockedAgents as $agent) {
+            if (stripos($userAgent, $agent) !== false) {
+                // Additional check: make sure it's not a legitimate browser
+                if (!$this->isLegitimateUser($userAgent)) {
+                    $this->blockRequest("Automated Tool Detected", $ip, $userAgent);
+                }
+            }
+        }
+    }
+    
+    private function isLegitimateUser($userAgent) {
+        // Check for legitimate browser signatures
+        $legitimateBrowsers = [
+            'Mozilla/', 'Chrome/', 'Safari/', 'Firefox/', 'Edge/', 'Opera/',
+            'MSIE', 'Trident/', 'WebKit/', 'Gecko/', 'AppleWebKit/'
+        ];
+        
+        foreach ($legitimateBrowsers as $browser) {
+            if (stripos($userAgent, $browser) !== false) {
+                return true; // This looks like a real browser
+            }
+        }
+        
+        return false; // No browser signatures found
+    }
+    
+    private function getClientIP() {
+        // Simple IP detection
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $ip = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0];
+            return trim($ip);
+        }
+        
+        if (!empty($_SERVER['HTTP_X_REAL_IP'])) {
+            return $_SERVER['HTTP_X_REAL_IP'];
+        }
+        
+        return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    }
+    
+    private function blockRequest($reason, $ip, $userAgent) {
+        // Log the block for debugging
+        error_log("🚫 Bot blocked: $reason | IP: $ip | UA: " . substr($userAgent, 0, 100));
+        
+        // Send a proper HTTP response
+        http_response_code(403);
+        header('Content-Type: text/html; charset=UTF-8');
+        
+        echo '<!DOCTYPE html>
+<html>
+<head>
+    <title>Access Denied</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { color: #d32f2f; }
+        p { color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ Access Denied</h1>
+        <p>This website is protected against automated access.</p>
+        <p>If you believe this is an error, please contact the site administrator.</p>
+        <p><small>Error Code: ' . htmlspecialchars($reason) . '</small></p>
+    </div>
+</body>
+</html>';
+        exit;
+    }
+}
+
+// Initialize protection (only if not already done)
+if (!isset($GLOBALS['bot_protection_initialized'])) {
+    new BotBlocker();
+    $GLOBALS['bot_protection_initialized'] = true;
+}
+?>
     
     public function __construct() {
         // COMPLETELY SKIP ALL BOT PROTECTION FOR LOCALHOST/DEVELOPMENT
