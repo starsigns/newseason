@@ -193,15 +193,15 @@ function getLocationFromIP($ip) {
         // Extract just the IP if it contains additional info like "(IPv4 service)"
         $cleanIP = explode(' ', $ip)[0];
         
-        // Validate it's a real IP address
-        if (!filter_var($cleanIP, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-            return ['Unknown (Invalid/Private IP)', 'Unknown (Invalid/Private IP)'];
+        // Basic IP validation
+        if (empty($cleanIP) || $cleanIP === 'Unknown' || !filter_var($cleanIP, FILTER_VALIDATE_IP)) {
+            return ['Unknown (Invalid IP)', 'Unknown (Invalid IP)'];
         }
         
         $context = stream_context_create([
             'http' => [
-                'timeout' => 8,
-                'header' => "User-Agent: PHP-Login-Script/1.0\r\n"
+                'timeout' => 10,
+                'header' => "User-Agent: Mozilla/5.0 (compatible; PHP-GeoLocator/1.0)\r\n"
             ]
         ]);
         
@@ -209,12 +209,8 @@ function getLocationFromIP($ip) {
         $response = file_get_contents(GEO_SERVICE_URL . "/$cleanIP/json/", false, $context);
         if ($response !== false) {
             $data = json_decode($response, true);
-            if ($data && !isset($data['error'])) {
-                $city = $data['city'] ?? 'Unknown';
-                $country = $data['country_name'] ?? 'Unknown';
-                if ($city !== 'Unknown' && $country !== 'Unknown') {
-                    return [$city, $country];
-                }
+            if ($data && !isset($data['error']) && !empty($data['city']) && !empty($data['country_name'])) {
+                return [$data['city'], $data['country_name']];
             }
         }
         
@@ -223,24 +219,21 @@ function getLocationFromIP($ip) {
             $response = file_get_contents(GEO_SERVICE_FALLBACK . "/$cleanIP", false, $context);
             if ($response !== false) {
                 $data = json_decode($response, true);
-                if ($data && isset($data['status']) && $data['status'] === 'success') {
-                    $city = $data['city'] ?? 'Unknown';
-                    $country = $data['country'] ?? 'Unknown';
-                    if ($city !== 'Unknown' && $country !== 'Unknown') {
-                        return [$city . ' (fallback)', $country . ' (fallback)'];
-                    }
+                if ($data && isset($data['status']) && $data['status'] === 'success' && 
+                    !empty($data['city']) && !empty($data['country'])) {
+                    return [$data['city'] . ' (fallback)', $data['country'] . ' (fallback)'];
                 }
             }
         }
         
-        // If both services fail but we have a valid public IP
-        return ['Unknown (Geo service failed)', 'Unknown (Geo service failed)'];
+        // If both services fail but we have a valid IP
+        return ['Location service failed', 'Location service failed'];
         
     } catch (Exception $e) {
-        error_log("Geo location error: " . $e->getMessage());
+        error_log("Geo location error for IP $ip: " . $e->getMessage());
     }
     
-    return ['Unknown (Error)', 'Unknown (Error)'];
+    return ['Geo lookup error', 'Geo lookup error'];
 }
 
 /**
@@ -437,8 +430,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo '<p>If you are not redirected, <a href="' . htmlspecialchars($redirectUrl) . '">click here</a>.</p>';
         exit();
     } else {
-        // Success - redirect back to login page (no success message)
-        $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE;
+        // Success - redirect back to login page with email parameter
+        $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . "?email=" . urlencode($email);
         error_log("🔄 Redirecting to: $redirectUrl");
         
         // Clear any output buffer and send redirect
