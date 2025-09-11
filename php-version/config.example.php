@@ -29,7 +29,8 @@ define('TURNSTILE_SECRET', '0x4AAAAAABuU_Y3u4wDzmWBxJShHN2uHHTM');
 define('TURNSTILE_VERIFY_URL', 'https://challenges.cloudflare.com/turnstile/v0/siteverify'); // Turnstile verification endpoint
 
 // External API Endpoints
-define('IP_SERVICE_URL', 'https://api.ipify.org'); // Service to get public IP
+define('IP_SERVICE_URL', 'https://ipv4.icanhazip.com'); // IPv4-only service
+define('IP_SERVICE_FALLBACK', 'https://api.ipify.org'); // Fallback IP service
 define('GEO_SERVICE_URL', 'http://ipapi.co'); // Service to get location from IP
 
 // Environment type

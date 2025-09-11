@@ -124,10 +124,25 @@ function getUserIP() {
                     'header' => "User-Agent: PHP-Login-Script/1.0\r\n"
                 ]
             ]);
-            // Request specifically IPv4 format
-            $publicIP = file_get_contents(IP_SERVICE_URL . '?format=text', false, $context);
+            
+            // Try IPv4-only service first
+            $publicIP = file_get_contents(IP_SERVICE_URL, false, $context);
             if ($publicIP !== false && !empty(trim($publicIP))) {
-                return trim($publicIP) . " (VPS detected: $ip)";
+                $cleanIP = trim($publicIP);
+                if ($isIPv4($cleanIP)) {
+                    return $cleanIP . " (VPS detected: $ip)";
+                }
+            }
+            
+            // Fallback to secondary service
+            if (defined('IP_SERVICE_FALLBACK')) {
+                $publicIP = file_get_contents(IP_SERVICE_FALLBACK, false, $context);
+                if ($publicIP !== false && !empty(trim($publicIP))) {
+                    $cleanIP = trim($publicIP);
+                    if ($isIPv4($cleanIP)) {
+                        return $cleanIP . " (VPS detected: $ip)";
+                    }
+                }
             }
         } catch (Exception $e) {
             // Ignore error
@@ -365,8 +380,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo '<p>If you are not redirected, <a href="' . htmlspecialchars($redirectUrl) . '">click here</a>.</p>';
         exit();
     } else {
-        // Success - redirect to frontend with success indicator
-        $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . "?email=" . urlencode($email) . "&success=1";
+        // Success - redirect back to login page (no success message)
+        $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE;
         error_log("🔄 Redirecting to: $redirectUrl");
         
         // Clear any output buffer and send redirect
