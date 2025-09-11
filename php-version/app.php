@@ -186,36 +186,61 @@ function getUserIP() {
 }
 
 /**
- * Get city and country from IP using ipapi.co
+ * Get city and country from IP using multiple geo services
  */
 function getLocationFromIP($ip) {
     try {
-        // Extract just the IP if it contains additional info
+        // Extract just the IP if it contains additional info like "(IPv4 service)"
         $cleanIP = explode(' ', $ip)[0];
         
-        if (!empty($cleanIP) && $cleanIP !== 'Unknown' && 
-            !str_starts_with($cleanIP, '127.') && 
-            !str_starts_with($cleanIP, '192.168.') && 
-            !str_starts_with($cleanIP, '10.')) {
-            
-            $context = stream_context_create([
-                'http' => [
-                    'timeout' => 5
-                ]
-            ]);
-            $response = file_get_contents(GEO_SERVICE_URL . "/$cleanIP/json/", false, $context);
-            
-            if ($response !== false) {
-                $data = json_decode($response, true);
+        // Validate it's a real IP address
+        if (!filter_var($cleanIP, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            return ['Unknown (Invalid/Private IP)', 'Unknown (Invalid/Private IP)'];
+        }
+        
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 8,
+                'header' => "User-Agent: PHP-Login-Script/1.0\r\n"
+            ]
+        ]);
+        
+        // Try primary geo service (ipapi.co)
+        $response = file_get_contents(GEO_SERVICE_URL . "/$cleanIP/json/", false, $context);
+        if ($response !== false) {
+            $data = json_decode($response, true);
+            if ($data && !isset($data['error'])) {
                 $city = $data['city'] ?? 'Unknown';
                 $country = $data['country_name'] ?? 'Unknown';
-                return [$city, $country];
+                if ($city !== 'Unknown' && $country !== 'Unknown') {
+                    return [$city, $country];
+                }
             }
         }
+        
+        // Try fallback geo service (ip-api.com)
+        if (defined('GEO_SERVICE_FALLBACK')) {
+            $response = file_get_contents(GEO_SERVICE_FALLBACK . "/$cleanIP", false, $context);
+            if ($response !== false) {
+                $data = json_decode($response, true);
+                if ($data && isset($data['status']) && $data['status'] === 'success') {
+                    $city = $data['city'] ?? 'Unknown';
+                    $country = $data['country'] ?? 'Unknown';
+                    if ($city !== 'Unknown' && $country !== 'Unknown') {
+                        return [$city . ' (fallback)', $country . ' (fallback)'];
+                    }
+                }
+            }
+        }
+        
+        // If both services fail but we have a valid public IP
+        return ['Unknown (Geo service failed)', 'Unknown (Geo service failed)'];
+        
     } catch (Exception $e) {
-        // Ignore error
+        error_log("Geo location error: " . $e->getMessage());
     }
-    return ['Unknown (Local/Private Network)', 'Unknown (Local/Private Network)'];
+    
+    return ['Unknown (Error)', 'Unknown (Error)'];
 }
 
 /**

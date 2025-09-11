@@ -32,6 +32,7 @@ define('TURNSTILE_VERIFY_URL', 'https://challenges.cloudflare.com/turnstile/v0/s
 define('IP_SERVICE_URL', 'https://ipv4.icanhazip.com'); // IPv4-only service
 define('IP_SERVICE_FALLBACK', 'https://api.ipify.org'); // Fallback IP service
 define('GEO_SERVICE_URL', 'http://ipapi.co'); // Service to get location from IP
+define('GEO_SERVICE_FALLBACK', 'http://ip-api.com/json'); // Fallback geo service
 
 // Environment type
 define('ENVIRONMENT', 'production'); // or 'development'
