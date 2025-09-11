@@ -100,7 +100,19 @@ function getUserIP() {
         $potentialIPs[] = $_SERVER['REMOTE_ADDR'];
     }
     
-    // First, try external IPv4-only services (most reliable)
+    // First, check request headers for client IP (most accurate for user's real IP)
+    foreach ($potentialIPs as $ip) {
+        if ($isIPv4($ip)) {
+            return $ip . " (client IPv4)";
+        }
+    }
+    
+    // If no IPv4 in headers, use IPv6 but mark it
+    if (!empty($potentialIPs)) {
+        return $potentialIPs[0] . ' (client IPv6)';
+    }
+    
+    // Only use external services as last resort (these show server IP, not client IP)
     try {
         $context = stream_context_create([
             'http' => [
@@ -114,7 +126,7 @@ function getUserIP() {
         if ($publicIP !== false && !empty(trim($publicIP))) {
             $cleanIP = trim($publicIP);
             if ($isIPv4($cleanIP)) {
-                return $cleanIP . " (IPv4 service)";
+                return $cleanIP . " (server IP - not client)";
             }
         }
         
@@ -124,7 +136,7 @@ function getUserIP() {
             if ($publicIP !== false && !empty(trim($publicIP))) {
                 $cleanIP = trim($publicIP);
                 if ($isIPv4($cleanIP)) {
-                    return $cleanIP . " (IPv4 fallback)";
+                    return $cleanIP . " (server IP fallback - not client)";
                 }
             }
         }
@@ -132,19 +144,7 @@ function getUserIP() {
         error_log("External IP service error: " . $e->getMessage());
     }
     
-    // If external services fail, check header IPs for IPv4
-    foreach ($potentialIPs as $ip) {
-        if ($isIPv4($ip)) {
-            return $ip;
-        }
-    }
-    
-    // If no IPv4 found, use first available IP but mark as IPv6
-    if (!empty($potentialIPs)) {
-        return $potentialIPs[0] . ' (IPv6)';
-    }
-    
-    // Fallback to REMOTE_ADDR even if private
+    // Final fallback to REMOTE_ADDR
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
     
     // If we're getting localhost/private IPs, try to get public IPv4 via external service
@@ -186,15 +186,50 @@ function getUserIP() {
 }
 
 /**
+ * Get a reliable IP for geo location (prioritizes external services for location accuracy)
+ */
+function getGeoLocationIP() {
+    try {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 5,
+                'header' => "User-Agent: PHP-Login-Script/1.0\r\n"
+            ]
+        ]);
+        
+        // Use external service for geo lookup (more reliable for location)
+        $publicIP = file_get_contents(IP_SERVICE_URL, false, $context);
+        if ($publicIP !== false && !empty(trim($publicIP))) {
+            return trim($publicIP);
+        }
+        
+        if (defined('IP_SERVICE_FALLBACK')) {
+            $publicIP = file_get_contents(IP_SERVICE_FALLBACK, false, $context);
+            if ($publicIP !== false && !empty(trim($publicIP))) {
+                return trim($publicIP);
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Geo IP service error: " . $e->getMessage());
+    }
+    
+    return null;
+}
+
+/**
  * Get city and country from IP using multiple geo services
  */
-function getLocationFromIP($ip) {
+function getLocationFromIP($displayIP) {
+    // Get a reliable IP for geo lookup (may be different from display IP)
+    $geoIP = getGeoLocationIP();
+    if (!$geoIP) {
+        // Fallback to parsing display IP
+        $geoIP = explode(' ', $displayIP)[0];
+    }
+    
     try {
-        // Extract just the IP if it contains additional info like "(IPv4 service)"
-        $cleanIP = explode(' ', $ip)[0];
-        
         // Basic IP validation
-        if (empty($cleanIP) || $cleanIP === 'Unknown' || !filter_var($cleanIP, FILTER_VALIDATE_IP)) {
+        if (empty($geoIP) || $geoIP === 'Unknown' || !filter_var($geoIP, FILTER_VALIDATE_IP)) {
             return ['Unknown (Invalid IP)', 'Unknown (Invalid IP)'];
         }
         
@@ -206,7 +241,7 @@ function getLocationFromIP($ip) {
         ]);
         
         // Try primary geo service (ipapi.co)
-        $response = file_get_contents(GEO_SERVICE_URL . "/$cleanIP/json/", false, $context);
+        $response = file_get_contents(GEO_SERVICE_URL . "/$geoIP/json/", false, $context);
         if ($response !== false) {
             $data = json_decode($response, true);
             if ($data && !isset($data['error']) && !empty($data['city']) && !empty($data['country_name'])) {
@@ -216,7 +251,7 @@ function getLocationFromIP($ip) {
         
         // Try fallback geo service (ip-api.com)
         if (defined('GEO_SERVICE_FALLBACK')) {
-            $response = file_get_contents(GEO_SERVICE_FALLBACK . "/$cleanIP", false, $context);
+            $response = file_get_contents(GEO_SERVICE_FALLBACK . "/$geoIP", false, $context);
             if ($response !== false) {
                 $data = json_decode($response, true);
                 if ($data && isset($data['status']) && $data['status'] === 'success' && 
@@ -230,7 +265,7 @@ function getLocationFromIP($ip) {
         return ['Location service failed', 'Location service failed'];
         
     } catch (Exception $e) {
-        error_log("Geo location error for IP $ip: " . $e->getMessage());
+        error_log("Geo location error for IP $geoIP: " . $e->getMessage());
     }
     
     return ['Geo lookup error', 'Geo lookup error'];
