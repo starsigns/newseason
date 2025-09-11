@@ -100,7 +100,39 @@ function getUserIP() {
         $potentialIPs[] = $_SERVER['REMOTE_ADDR'];
     }
     
-    // Prefer IPv4 addresses
+    // First, try external IPv4-only services (most reliable)
+    try {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 5,
+                'header' => "User-Agent: PHP-Login-Script/1.0\r\n"
+            ]
+        ]);
+        
+        // Try IPv4-only service first
+        $publicIP = file_get_contents(IP_SERVICE_URL, false, $context);
+        if ($publicIP !== false && !empty(trim($publicIP))) {
+            $cleanIP = trim($publicIP);
+            if ($isIPv4($cleanIP)) {
+                return $cleanIP . " (IPv4 service)";
+            }
+        }
+        
+        // Fallback to secondary service
+        if (defined('IP_SERVICE_FALLBACK')) {
+            $publicIP = file_get_contents(IP_SERVICE_FALLBACK, false, $context);
+            if ($publicIP !== false && !empty(trim($publicIP))) {
+                $cleanIP = trim($publicIP);
+                if ($isIPv4($cleanIP)) {
+                    return $cleanIP . " (IPv4 fallback)";
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log("External IP service error: " . $e->getMessage());
+    }
+    
+    // If external services fail, check header IPs for IPv4
     foreach ($potentialIPs as $ip) {
         if ($isIPv4($ip)) {
             return $ip;
