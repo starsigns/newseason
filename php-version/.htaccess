@@ -1,5 +1,9 @@
 RewriteEngine On
 
+# Force PHP processing for .php files
+AddType application/x-httpd-php .php
+AddHandler php7-script .php
+
 # Prevent direct access to app.php (only allow POST requests)
 <Files "app.php">
     <RequireAll>

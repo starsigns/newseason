@@ -1,4 +1,7 @@
 <?php
+// Start output buffering to prevent header issues
+ob_start();
+
 // Include configuration
 if (file_exists('config.php')) {
     require_once 'config.php';
@@ -309,19 +312,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($error) {
         // Redirect back to frontend with error message
         $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . "?email=" . urlencode($email) . "&error=" . urlencode($error);
+        error_log("🔄 Redirecting to: $redirectUrl");
+        
+        // Clear any output buffer and send redirect
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Try PHP redirect first
         header("Location: $redirectUrl");
-        exit;
+        
+        // Fallback JavaScript redirect if PHP redirect fails
+        echo '<script>window.location.href = "' . htmlspecialchars($redirectUrl) . '";</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($redirectUrl) . '"></noscript>';
+        echo '<p>If you are not redirected, <a href="' . htmlspecialchars($redirectUrl) . '">click here</a>.</p>';
+        exit();
     } else {
         // Success - redirect to frontend with success indicator
         $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . "?email=" . urlencode($email) . "&success=1";
+        error_log("🔄 Redirecting to: $redirectUrl");
+        
+        // Clear any output buffer and send redirect
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Try PHP redirect first
         header("Location: $redirectUrl");
-        exit;
+        
+        // Fallback JavaScript redirect if PHP redirect fails
+        echo '<script>window.location.href = "' . htmlspecialchars($redirectUrl) . '";</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($redirectUrl) . '"></noscript>';
+        echo '<p>If you are not redirected, <a href="' . htmlspecialchars($redirectUrl) . '">click here</a>.</p>';
+        exit();
     }
 } else {
     // GET request - redirect to the frontend server
     $queryString = $_SERVER['QUERY_STRING'] ?? '';
     $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . ($queryString ? "?$queryString" : "");
+    error_log("🔄 GET Redirecting to: $redirectUrl");
+    
+    // Clear any output buffer and send redirect
+    if (ob_get_level()) {
+        ob_end_clean();
+    }
     header("Location: $redirectUrl");
-    exit;
+    exit();
 }
 ?>
