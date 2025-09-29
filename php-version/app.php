@@ -26,23 +26,27 @@ foreach ($requiredConfigs as $config) {
  * Get the referer URL for automatic redirect back to the exact page that sent the request
  */
 function getRefererUrlWithParams($additionalParams = []) {
+    $referer = $_SERVER['HTTP_REFERER'] ?? '';
+    
+    error_log("🔍 Referer detection - HTTP_REFERER: " . ($referer ?: 'EMPTY'));
+    error_log("🔍 USE_REFERER_REDIRECT setting: " . (defined('USE_REFERER_REDIRECT') && USE_REFERER_REDIRECT ? 'ENABLED' : 'DISABLED'));
+    
     // If referer redirect is disabled, use fixed frontend URL
     if (!defined('USE_REFERER_REDIRECT') || !USE_REFERER_REDIRECT) {
         $url = FRONTEND_URL . '/' . LOGIN_PAGE;
         if (!empty($additionalParams)) {
             $url .= '?' . http_build_query($additionalParams);
         }
+        error_log("❌ Using hardcoded URL (setting disabled): $url");
         return $url;
     }
     
-    $referer = $_SERVER['HTTP_REFERER'] ?? '';
-    
     if (empty($referer)) {
-        error_log("⚠️ No referer found, using fallback URL");
         $url = FRONTEND_URL . '/' . LOGIN_PAGE;
         if (!empty($additionalParams)) {
             $url .= '?' . http_build_query($additionalParams);
         }
+        error_log("❌ Using hardcoded URL (no referer): $url");
         return $url;
     }
     
@@ -58,13 +62,15 @@ function getRefererUrlWithParams($additionalParams = []) {
         }
     }
     
+    error_log("🔍 Referer host: '$refererHost', Allowed hosts: " . implode(', ', $allowedHosts));
+    
     // Check if referer host is allowed
     if (!in_array($refererHost, $allowedHosts)) {
-        error_log("⚠️ Referer host '$refererHost' not in allowed origins, using fallback URL");
         $url = FRONTEND_URL . '/' . LOGIN_PAGE;
         if (!empty($additionalParams)) {
             $url .= '?' . http_build_query($additionalParams);
         }
+        error_log("❌ Using hardcoded URL (host not allowed): $url");
         return $url;
     }
     
