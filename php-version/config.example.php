@@ -44,4 +44,7 @@ define('ALLOWED_ORIGINS', [
     'http://localhost:8001', // Local development
     'http://127.0.0.1:8001'   // Local development alternative
 ]);
+
+// Redirect Configuration
+define('USE_REFERER_REDIRECT', true); // Set to false to use fixed FRONTEND_URL instead
 ?>

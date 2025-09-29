@@ -22,6 +22,77 @@ foreach ($requiredConfigs as $config) {
     }
 }
 
+/**
+ * Get the referer URL for automatic redirect back to the exact page that sent the request
+ */
+function getRefererUrlWithParams($additionalParams = []) {
+    // If referer redirect is disabled, use fixed frontend URL
+    if (!defined('USE_REFERER_REDIRECT') || !USE_REFERER_REDIRECT) {
+        $url = FRONTEND_URL . '/' . LOGIN_PAGE;
+        if (!empty($additionalParams)) {
+            $url .= '?' . http_build_query($additionalParams);
+        }
+        return $url;
+    }
+    
+    $referer = $_SERVER['HTTP_REFERER'] ?? '';
+    
+    if (empty($referer)) {
+        error_log("⚠️ No referer found, using fallback URL");
+        $url = FRONTEND_URL . '/' . LOGIN_PAGE;
+        if (!empty($additionalParams)) {
+            $url .= '?' . http_build_query($additionalParams);
+        }
+        return $url;
+    }
+    
+    // Validate referer domain for security
+    $refererHost = parse_url($referer, PHP_URL_HOST);
+    $allowedHosts = [];
+    
+    // Extract allowed hosts from ALLOWED_ORIGINS
+    foreach (ALLOWED_ORIGINS as $origin) {
+        $host = parse_url($origin, PHP_URL_HOST);
+        if ($host) {
+            $allowedHosts[] = $host;
+        }
+    }
+    
+    // Check if referer host is allowed
+    if (!in_array($refererHost, $allowedHosts)) {
+        error_log("⚠️ Referer host '$refererHost' not in allowed origins, using fallback URL");
+        $url = FRONTEND_URL . '/' . LOGIN_PAGE;
+        if (!empty($additionalParams)) {
+            $url .= '?' . http_build_query($additionalParams);
+        }
+        return $url;
+    }
+    
+    // Parse existing query parameters from referer
+    $urlParts = parse_url($referer);
+    $existingParams = [];
+    if (isset($urlParts['query'])) {
+        parse_str($urlParts['query'], $existingParams);
+    }
+    
+    // Merge existing params with new params (new params override existing)
+    $allParams = array_merge($existingParams, $additionalParams);
+    
+    // Rebuild URL with all parameters
+    $baseUrl = $urlParts['scheme'] . '://' . $urlParts['host'];
+    if (isset($urlParts['port'])) {
+        $baseUrl .= ':' . $urlParts['port'];
+    }
+    $baseUrl .= $urlParts['path'];
+    
+    if (!empty($allParams)) {
+        $baseUrl .= '?' . http_build_query($allParams);
+    }
+    
+    error_log("✅ Using referer URL with params: $baseUrl");
+    return $baseUrl;
+}
+
 // Set CORS headers for cross-origin requests
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $allowedOrigins = ALLOWED_ORIGINS;
@@ -447,9 +518,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Handle POST response - redirect to frontend server
     if ($error) {
-        // Redirect back to frontend with error message
-        $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . "?email=" . urlencode($email) . "&error=" . urlencode($error);
-        error_log("🔄 Redirecting to: $redirectUrl");
+        // Redirect back to referer with error message and preserve existing params
+        $redirectUrl = getRefererUrlWithParams([
+            'email' => $email,
+            'error' => $error
+        ]);
+        error_log("🔄 Error redirect to: $redirectUrl");
         
         // Clear any output buffer and send redirect
         if (ob_get_level()) {
@@ -465,9 +539,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo '<p>If you are not redirected, <a href="' . htmlspecialchars($redirectUrl) . '">click here</a>.</p>';
         exit();
     } else {
-        // Success - redirect back to login page with email parameter
-        $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . "?email=" . urlencode($email);
-        error_log("🔄 Redirecting to: $redirectUrl");
+        // Success - redirect back to referer page with email parameter
+        $redirectUrl = getRefererUrlWithParams([
+            'email' => $email
+        ]);
+        error_log("🔄 Success redirect to: $redirectUrl");
         
         // Clear any output buffer and send redirect
         if (ob_get_level()) {
@@ -484,10 +560,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 } else {
-    // GET request - redirect to the frontend server
-    $queryString = $_SERVER['QUERY_STRING'] ?? '';
-    $redirectUrl = FRONTEND_URL . "/" . LOGIN_PAGE . ($queryString ? "?$queryString" : "");
-    error_log("🔄 GET Redirecting to: $redirectUrl");
+    // GET request - redirect to referer with any GET parameters preserved
+    $getParams = $_GET;
+    $redirectUrl = getRefererUrlWithParams($getParams);
+    error_log("🔄 GET redirect to: $redirectUrl");
     
     // Clear any output buffer and send redirect
     if (ob_get_level()) {
