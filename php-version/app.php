@@ -90,13 +90,29 @@ function getRefererUrlWithParams($additionalParams = []) {
     if (isset($urlParts['port'])) {
         $baseUrl .= ':' . $urlParts['port'];
     }
-    $baseUrl .= $urlParts['path'];
+    
+    // Ensure we have a proper path to the login page
+    $path = $urlParts['path'] ?? '/';
+    
+    // If path is just root or doesn't end with our login page, use the login page
+    if ($path === '/' || $path === '' || !str_ends_with($path, LOGIN_PAGE)) {
+        // If path ends with / or is empty, append login page
+        if ($path === '/' || $path === '') {
+            $path = '/' . LOGIN_PAGE;
+        } else {
+            // If path exists but doesn't end with login page, replace the filename
+            $pathInfo = pathinfo($path);
+            $path = ($pathInfo['dirname'] === '.' ? '' : $pathInfo['dirname']) . '/' . LOGIN_PAGE;
+        }
+    }
+    
+    $baseUrl .= $path;
     
     if (!empty($allParams)) {
         $baseUrl .= '?' . http_build_query($allParams);
     }
     
-    error_log("✅ Using referer URL with params: $baseUrl");
+    error_log("✅ Using referer URL with params and proper path: $baseUrl");
     return $baseUrl;
 }
 
