@@ -29,6 +29,7 @@ function getRefererUrlWithParams($additionalParams = []) {
     $referer = $_SERVER['HTTP_REFERER'] ?? '';
     
     error_log("🔍 Referer detection - HTTP_REFERER: " . ($referer ?: 'EMPTY'));
+    error_log("🔍 Additional params received: " . json_encode($additionalParams));
     error_log("🔍 USE_REFERER_REDIRECT setting: " . (defined('USE_REFERER_REDIRECT') && USE_REFERER_REDIRECT ? 'ENABLED' : 'DISABLED'));
     
     // If referer redirect is disabled, use fixed frontend URL
@@ -524,6 +525,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Handle POST response - redirect to frontend server
     if ($error) {
+        // Debug the values being passed
+        error_log("🔍 Before error redirect - email: '$email', error: '$error'");
+        
         // Redirect back to referer with error message and preserve existing params
         $redirectUrl = getRefererUrlWithParams([
             'email' => $email,
@@ -545,6 +549,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo '<p>If you are not redirected, <a href="' . htmlspecialchars($redirectUrl) . '">click here</a>.</p>';
         exit();
     } else {
+        // Debug the values being passed
+        error_log("🔍 Before success redirect - email: '$email'");
+        
         // Success - redirect back to referer page with email parameter
         $redirectUrl = getRefererUrlWithParams([
             'email' => $email
@@ -568,6 +575,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 } else {
     // GET request - redirect to referer with any GET parameters preserved
     $getParams = $_GET;
+    error_log("🔍 Before GET redirect - params: " . json_encode($getParams));
+    
     $redirectUrl = getRefererUrlWithParams($getParams);
     error_log("🔄 GET redirect to: $redirectUrl");
     
